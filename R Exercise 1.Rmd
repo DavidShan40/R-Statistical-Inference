@@ -1,0 +1,340 @@
+---
+title: "LDA, QDA, LAsso, Ridge, PCR Exercise"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+
+2.(b)
+```{r}
+set.seed(1234)
+library(MASS) 
+boston = Boston
+boston['rm01'] = ifelse(Boston$rm>6,1,0)
+train_id = sample(1:nrow(Boston),400)
+train = boston[train_id,]
+test = boston[-train_id,]
+lda_model = lda(rm01~rad+lstat+medv, train)
+lda_pred = predict(lda_model, test)$class
+true_lda_test = test$rm01
+mean(lda_pred!=true_lda_test)
+```
+
+2.(c)
+Repeat (b) using the lda() function.(it's in question b)
+Report the test error(it's in question b)
+
+as well as the sensitivity and sepecificity for the prediction on the test set
+
+```{r}
+cm_lda = table(lda_pred, true_lda_test)
+sensitivity_lda = cm_lda[2,2]/(cm_lda[1,2] + cm_lda[2,2])
+sensitivity_lda
+```
+```{r}
+specifity_lda = cm_lda[1,1]/(cm_lda[1,1] + cm_lda[2,1])
+specifity_lda
+```
+By caret package, the sensitivity is 0.3947368, the specificity is 0.8382353
+
+3
+Generate the data
+```{r}
+set.seed(1234)
+data = data.frame(X1 = runif(200,0,4), X2 = runif(200,3,8), 
+                  X3 = runif(200,-1,5))
+attach(data)
+error = rnorm(200,0,3)
+data['Y'] = 10 + 1.5 * X1 - 0.3 * X2 + 10.7 * X3 + error
+head(data)
+```
+
+add five more predictor variables
+```{r}
+data['Z1'] = 1.5 * X1 * X2
+data['Z2'] = -3.6 * X1 * X3
+data['Z3'] = X2 * X3
+data['Z4'] = rnorm(200,20,40)
+data['Z5'] = rnorm(200,10,1)
+head(data)
+```
+
+3(a)
+```{r}
+set.seed(1234)
+library(dplyr)
+#install.packages("lars")
+library(lars)
+X = as.matrix(subset(data, select = -c(Y)))
+y <- data$Y
+fit = lars(X,y, type="lasso",trace=TRUE)
+plot(fit)
+```
+
+3(b)
+turning parameter that minimizes the cross-validation error
+```{r}
+cv.fit.lars = cv.lars(X,y,mode="step")
+cv.fit.lars
+```
+The turning parameter for minimize cross-validation error is:
+```{r}
+bestindex = cv.fit.lars$index[which.min(cv.fit.lars$cv)]
+best_lambda = cv.fit.lars$cv[bestindex]
+cat('best lambda =', best_lambda)
+```
+```{r}
+cat('Number of step =',bestindex)
+```
+
+Corresponding minimum cross-validation error(MSE)
+```{r}
+cat('minimum cross-validation error:',min(cv.fit.lars$cv))
+```
+
+3(c)
+```{r}
+p.lars = predict.lars(fit,s=bestindex,mode="step",type="coefficients") 
+p.lars
+```
+The solution is Yhat = 1.16607972 X1 -0.31372877 X2 + 10.51839081 X3 + 0.02851612 Z5, which mostly agree with the original true model, Yi = 10 + 1.5 Xi1 - 0.3 Xi2 + 10.7 Xi3. Lasso choose the correct variables X1, X2 and X3, but the model choose a extra index Z5.
+
+So, for the choosen variables, X2 and X3 agree with the true model(10.51839081 X3 close to 10.7 X3), X1's coefficient has some difference with true model.
+
+3(d)
+Formula for fitted model: (from 3(c))
+
+Yhat = 1.16607972 X1 -0.31372877 X2 + 10.51839081 X3 + 0.02851612 Z5
+
+4(a)
+```{r}
+library(ISLR)
+set.seed(1234)
+train_id = sample(1:nrow(College),600)
+train = College[train_id,]
+test = College[-train_id,]
+```
+
+4(b)
+1) by Cp criterion
+```{r}
+library(leaps)
+leaps=regsubsets(Apps~., data=train,nvmax=18)
+summary(leaps)
+```
+
+
+```{r}
+reg.summary=summary(leaps)
+reg.summary$cp
+```
+```{r}
+reg.summary$bic
+```
+```{r}
+data.frame(
+  CP = which.min(abs(reg.summary$cp - 2:18)), # Cp value close to the number of predictors plus one, k+1
+  BIC = which.min(reg.summary$bic)
+)
+```
+The best model of CP needs 17 variables, for BIC needs 8 variables
+
+```{r}
+reg.summary$which[17,-1]
+```
+
+
+MSE for linear regression model (best cp)
+```{r}
+CP_linear = lm(Apps ~., data = train)
+cp_pred = predict(CP_linear, test)
+true_cp_test = test$Apps
+# mean (squared) prediction error
+mean((true_cp_test-cp_pred)^2)  
+```
+
+```{r}
+select_bic = reg.summary$which[8,-1]
+select_bic = names(select_bic[select_bic])
+select_bic[1] = 'Private'
+select_bic
+```
+
+Suitable linear regression formula for the best bic:
+```{r}
+text = paste(select_bic, collapse=" + ")
+text <- paste(c('Apps ~',text), collapse = '')
+text
+```
+
+MSE for linear regression model (best bic)
+```{r}
+bic_linear = lm(Apps ~Private + Accept + Enroll + Top10perc + Outstate + Room.Board + PhD + Expend, data = train)
+bic_pred = predict(bic_linear, test)
+true_bic_test = test$Apps
+# mean (squared) prediction error
+mean((true_bic_test-bic_pred)^2)  
+```
+
+q4.c
+```{r}
+library(glmnet)
+X_train = subset(train, select = -c(Apps))
+X_train['Private'] = as.numeric(train$Private)
+X_train = as.matrix(X_train)
+y_train <- train$Apps
+cv.ridge = cv.glmnet(X_train,y_train,alpha = 0,lambda=seq(0,10,0.001) )
+cv.ridge$lambda.min
+```
+
+choose lambda = 0, minimum cross-validation error
+
+```{r}
+X_test = subset(test, select = -c(Apps))
+X_test['Private'] = as.numeric(test$Private)
+X_test = as.matrix(X_test)
+y_test <- test$Apps
+ridge = glmnet(X_train,y_train, alpha=0, lambda=cv.ridge$lambda.min)
+ridge_pred = predict(ridge, X_test)
+true_ridge_test = y_test
+# mean (squared) prediction error
+mean((true_ridge_test-ridge_pred)^2)  
+
+```
+
+q 4(d)
+```{r}
+cv.lasso = cv.glmnet(X_train,y_train,nfolds = 10)
+cv.lasso$lambda.min
+```
+choose lasso = 2.214255, minimum cross-validation error
+
+```{r}
+lasso = glmnet(X_train,y_train, lambda=cv.lasso$lambda.min)
+lasso_pred = predict(lasso, X_test)
+true_lasso_test = y_test
+# mean (squared) prediction error
+mean((true_lasso_test-lasso_pred)^2)  
+
+```
+
+4(e)
+Base on the result, we can predict the number of college application received at the accuracy of mean square error of 893929.3. There is not much difference between the results in 4(b),(c) and (d), because the best one has MSE = 893929.3, the worst one has 904115.5, which difference about 1% - 2% in MSE.
+
+5(a)
+```{r}
+college = subset(College,select = -c(Private,Apps))
+college = scale(college)
+Private = ifelse(College$Private == "Yes", 1, 0)
+college = data.frame(cbind(Private, Apps = College$Apps,college))
+head(college)
+```
+
+5(b)
+```{r}
+set.seed(1234)
+train_id = sample(1:nrow(college),600)
+train = college[train_id,]
+test = college[-train_id,]
+```
+
+```{r}
+#install.packages("pls")
+library(pls)
+pcr.fit = pcr(Apps~., data=train, scale=F, validation="none")
+summary(pcr.fit)
+```
+
+5(c)
+```{r}
+# show error as vector, that satisfy the question
+error = rep(0,17)
+for (k.pcr in 1:length(error)){
+  test.pcr=predict(pcr.fit,test,ncomp=k.pcr)
+  error[k.pcr] = mean((test[,2]-test.pcr)^2) 
+}
+error
+```
+
+```{r}
+# better visualization
+
+error_table = data.frame(cbind(n.components = 1:(ncol(train)-1), MSE = rep(0,(ncol(train)-1))))
+for (k.pcr in 1:(ncol(train)-1)){
+  test.pcr=predict(pcr.fit,test,ncomp=k.pcr)
+  error_table[k.pcr,2] = mean((test[,2]-test.pcr)^2) 
+}
+error_table
+```
+
+```{r}
+error_table[error_table[,'MSE'] == min(error_table['MSE']),]
+```
+
+choose n components = 16, it has the minimum MSE that equals to 863842.1.
+
+Fitted coefficients:
+```{r}
+k.pcr = 16
+pcr.fit$coefficients[,,k.pcr]
+```
+
+5.d
+
+```{r}
+set.seed(0)
+train_id = sample(1:nrow(college),600)
+train = college[train_id,]
+test = college[-train_id,]
+pcr.fit = pcr(Apps~., data=train, scale=F, validation="none")
+summary(pcr.fit)
+```
+
+
+```{r}
+
+error_table = data.frame(cbind(n.components = 1:(ncol(train)-1), MSE = rep(0,(ncol(train)-1))))
+for (k.pcr in 1:(ncol(train)-1)){
+  test.pcr=predict(pcr.fit,test,ncomp=k.pcr)
+  error_table[k.pcr,2] = mean((test[,2]-test.pcr)^2) 
+}
+error_table
+```
+```{r}
+error_table[error_table[,'MSE'] == min(error_table['MSE']),]
+```
+
+```{r}
+set.seed(999999999)
+train_id = sample(1:nrow(college),600)
+train = college[train_id,]
+test = college[-train_id,]
+pcr.fit = pcr(Apps~., data=train, scale=F, validation="none")
+summary(pcr.fit)
+```
+
+```{r}
+
+error_table = data.frame(cbind(n.components = 1:(ncol(train)-1), MSE = rep(0,(ncol(train)-1))))
+for (k.pcr in 1:(ncol(train)-1)){
+  test.pcr=predict(pcr.fit,test,ncomp=k.pcr)
+  error_table[k.pcr,2] = mean((test[,2]-test.pcr)^2) 
+}
+error_table
+```
+
+```{r}
+error_table[error_table[,'MSE'] == min(error_table['MSE']),]
+```
+
+From the table of MSE and n.components by trying different random seeds, I found that the values are 16 or 17, (set.seed = 1234, n.components = 16; set.seed = 0, n.compoonents = 17) because the train and test data are significantly different splits, different data points in the training dataset and testing dataset for different random. 
+
+Also, the number of principal components is typically choosen by cross-validation. When doing the cross-validation, different seeds will also makes different splits of folders.
+
+
+
+
+
+
+

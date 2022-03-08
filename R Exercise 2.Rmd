@@ -1,0 +1,302 @@
+---
+title: "Markov chain Monte Carlo; Metropolis-Hasting algorithm; Gibbs sampling; optimization exercise"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+```{r}
+powre_func = function(n = 10, R = 500, mu_list = seq(1,3,0.1), sigma = 2,
+                      seed = 1234, alpha = 0.05){
+  set.seed(seed)
+  tpower_list = c()
+  for (mu in mu_list){
+    pval=c()
+    for (r in 1:R) {
+      x=rnorm(n,mu,sqrt(sigma))
+      mu0 = 2
+      tst=(mean(x)-mu0)/(sd(x)/sqrt(n))
+      pval=cbind(pval,2*(1-pnorm(abs(tst)))) # Rejection criterion: p-value
+    }
+    tpower=mean(pval<alpha) 
+    tpower_list = cbind(tpower_list, tpower)
+  }
+  return(tpower_list)
+}
+
+
+mu_list = seq(1,3,0.1)
+tpower_10 = powre_func(mu_list = mu_list, n = 10)
+tpower_100 = powre_func(mu_list = mu_list, n = 100)
+
+plot(mu_list, tpower_10,main = "power function for n = 10 and 100", pch=0,ylim = c(0,1), ylab = "test power", xlab = "alternative value of μ")
+points(mu_list, tpower_100, col = 2)
+legend("bottomleft"，legend=c("n = 10", "n = 100"),
+       col=c("black", "red"),pch=0:1)
+```
+
+
+1.b
+```{r}
+powre_func = function(n = 10, R = 500, mu_list = seq(1,3,0.1), sigma = 2,
+                      seed = 1234, alpha = 0.05){
+  set.seed(seed)
+  tpower_list = c()
+  for (mu in mu_list){
+    pval=c()
+    for (r in 1:R) {
+      x=rnorm(n,mu,sqrt(sigma))
+      mu0 = 2
+      tst=(mean(x)-mu0)/(sd(x)/sqrt(n))
+      pval=cbind(pval,pnorm(tst, lower.tail = FALSE)) # Rejection criterion: p-value
+    }
+    tpower=mean(pval<alpha) 
+    tpower_list = cbind(tpower_list, tpower)
+  }
+  return(tpower_list)
+}
+
+
+mu_list = seq(1,3,0.1)
+tpower_10 = powre_func(mu_list = mu_list, n = 10)
+tpower_100 = powre_func(mu_list = mu_list, n = 100)
+
+plot(mu_list, tpower_10, ylim = c(0,1), main = "power function for n = 10 and 100", pch=0, ylab = "test power", xlab = "alternative value of μ")
+points(mu_list, tpower_100, col = 2)
+legend("bottomleft"，legend=c("n = 10", "n = 100"),
+       col=c("black", "red"),pch=0:1)
+```
+
+1(c)
+For solution in 1(a), n = 100 has larger test power than n = 10 for most of the points. For both n = 100 and n = 10, when μ closer to 2, test power is lower.
+Both test size works well because test size close to 0.05 when μ closer to 2. Also test power is large (especially n = 100) when μ between 1 and 1.5, between 2.5 and 3.
+
+For solution in 1(b), n = 100 has larger test power than n = 10 when alternative value μ > 2, lower test power when alternative value μ < 2. For both n = 100 and n = 10, when alternative value of μ becomes smaller, test power is lower.
+Both test size works well because test size close to 0.05 when μ closer to 2. Also test power is large (especially n = 100) when μ between 2.5 and 3.
+
+
+2(a)
+```{r}
+pgamma(2.5, shape = 5, scale = 0.5)
+```
+true θ = P(X < μ) = 0.5595067
+I don't expect θ be 0.5, because mean is different than median in gamma distribution, θ represent the quantile of μ.
+
+2(b)
+```{r}
+set.seed(1234)
+p = pgamma(2.5, shape = 5, scale = 0.5) # true θ
+n=20
+R=500
+phat1 = rep(0,R)
+phat2 = rep(0,R)
+for (r in 1:R) {
+  x=rgamma(n,shape=5,scale=0.5)
+  phat1[r]=mean(x<mean(x)); phat2[r]=mean(x<2.5)
+}
+bias1=mean(phat1)-p; bias2=mean(phat2)-p
+var1=var(phat1); var2=var(phat2)
+mse1=mean((phat1-p)^2)
+mse2=mean((phat2-p)^2)
+```
+```{r}
+cat('bias for θ1, θ2:',bias1,bias2,
+    '\nvariance for θ1, θ2:',var1,var2,
+    '\nmse for θ1, θ2:',mse1,mse2)
+```
+
+
+2(c)
+```{r}
+set.seed(1234)
+p = pgamma(2.5, shape = 5, scale = 1) # true θ
+n=20
+R=500
+phat1 = rep(0,R)
+phat2 = rep(0,R)
+for (r in 1:R) {
+  x=rgamma(n,shape=5,scale=1)
+  phat1[r]=mean(x<mean(x)); phat2[r]=mean(x<5)#I think 2.5 in 2(b) is true mean
+}
+bias1=mean(phat1)-p; bias2=mean(phat2)-p
+var1=var(phat1); var2=var(phat2)
+mse1=mean((phat1-p)^2)
+mse2=mean((phat2-p)^2)
+```
+```{r}
+cat('bias for θ1, θ2:',bias1,bias2,
+    '\nvariance for θ1, θ2:',var1,var2,
+    '\nmse for θ1, θ2:',mse1,mse2)
+```
+
+
+for 2(b), θ1 is better on variance and mse since they are smaller, θ2's bias is beter since it is closer to 0.
+for 2(c), θ1 is better because its bias is closer to 0, variance is smaller, mse is smaller.
+
+2(d)
+
+calculate variance *
+```{r}
+set.seed(1234)
+
+B=500
+n=50
+x=rgamma(n,shape=5,scale=0.5)
+phat1b=rep(0,B)
+for (b in 1:B) {
+  bindx=sample(1:n,n,replace=T)
+  xb=x[bindx]
+  phat1b[b]=mean(xb<mean(xb))
+}
+var(phat1b)
+```
+Steps above shows how to genreate Var∗(ˆθ1). Draw a random sample of size n with replacement from the original data set and compute the corresponding estimate ˆθ1.
+Then Repeat last step for a large number B=500 times. Denote the resulting
+bootstrap samples by D1, . . . ,D500. Find the corresponding
+estimates ˆθ1star (ˆθ1*), ... ,ˆθ500star. Then use these ˆθstar to approximate the variance by variance formula. 
+Then I put above bootstrap into simulation below.
+
+
+calculate CI
+```{r}
+set.seed(1234)
+p1 = pgamma(2.5, shape = 5, scale = 0.5) # true θ
+n=50
+R=500
+B=500
+phatL=rep(0,R)
+phatU=rep(0,R)
+for (r in 1:R) {
+  x=rgamma(n,shape=5,scale=0.5)
+  phat1=mean(x<mean(x))
+  
+  phat1b=rep(0,B)
+  for (b in 1:B) {
+    bindx=sample(1:n,n,replace=T)
+    xb=x[bindx]
+    phat1b[b]=mean(xb<mean(xb))
+  }
+  phatL[r]=phat1-qnorm(0.975)*sqrt(var(phat1b)) 
+  phatU[r]=phat1+qnorm(0.975)*sqrt(var(phat1b))   
+}
+```
+
+```{r}
+cp=mean(phatL<p1 & phatU>p1)
+mwid=mean(phatU-phatL)
+vL=var(phatL);vU=var(phatU)
+cp;mwid;vL;vU
+```
+cp is not very close to 1-alpha, 1-alpha should close to 0.95, but it is 0.982.
+width of CI is narrow, which is 0.188
+variance of confidence limits are small (< 0.002), which is good.
+Overall, CI works well by above discussion.
+
+q3(a)
+```{r}
+func_hist = function(a,b){
+  set.seed(1234)
+  x1 = rgamma(10000,a,1)
+  x2 = rgamma(10000,b,1)
+  x = x1/(x1+x2)
+  hist(x,prob = TRUE, main = paste('histogram for a =',a, 'b =',b))
+  lines(seq(0,1,length.out=10000),dbeta(seq(0,1,length.out = 10000),a,b), col = 'red')
+}
+```
+
+
+```{r}
+par(mfrow=c(2,3))
+func_hist(.5,.5);func_hist(2,2);func_hist(1,2)
+func_hist(2,1);func_hist(4,2);func_hist(2,4)
+```
+For each graph, true density function are close to the histograms, so that the performance is good.
+
+q3(b)
+```{r}
+func_hist = function(a,b,seed = 1234, n = 10000){
+set.seed(seed)
+x = NULL
+temp_x = seq(0.001,1-0.001,0.001) # random sequence
+c = max(dbeta(temp_x,a,b)/dunif(temp_x))
+for(i in 1:n*c)
+{
+beta = rbeta(1,a,b)
+y = runif(1)
+if( beta <=  dbeta(y,a,b)/(c * dunif(y))) 
+ { x = c(x,y)}
+}
+hist(x,prob = TRUE, main = paste('histogram for a =',a, 'b =',b))
+lines(seq(0,1,length.out=10000),dbeta(seq(0,1,length.out = 10000),a,b), col = 'red')
+}
+```
+
+```{r}
+par(mfrow=c(2,3))
+func_hist(0.5,0.5);func_hist(2,2);func_hist(1,2)
+func_hist(2,1);func_hist(4,2);func_hist(2,4)
+```
+Describe the method clearly:
+
+Step 1: Independently generate y from the probability density u ∼U (0,1) and beta ∼Beta (a,b).
+
+Step 2: Accept x = y if beta ≤ f (y )/ cg (y ) , where c = max(f (y )/g(y)). 
+f(y) is pdf of Beta (a,b), g(y) is pdf of U (0,1)
+
+Step 3: Continue Steps 1 and 2 until one has collected a sufficient
+number of accepted x ’s. I choose n = 10000
+
+Check the performace: the performance in (a) is better than (b), because the histogram is closer to the true density funciton.
+
+4(a)
+```{r}
+set.seed(1234)
+# w(x)/f(x)
+h=function(x){exp(-(sqrt(x)+0.5*x)) * (sin(x)^2)/ # w(x)
+ (0.5*exp(-0.5*x)) # f(x), which is a pdf function of chisquare(2)
+}
+m=1000
+y=h(rexp(m,0.5))
+mean(y)
+```
+Monte Carlo integration for estimating θ is approximately 0.0816
+
+Describe the method for 4(a):
+First, decompose the original function w(x) into the product of a function h(x) and a probabilty density function f(x) = 0.5 exp(−0.5x) defined over the interval (0,inf), f(x) is the pdf function of exp(0.5)
+
+Then, Monte Carlo integration draws a large number of x1,...,xn of
+random variables from f(x), I use n = 1000 to generate 1000 random variables, then apply mean(h*x) to approximate θ.
+
+4(b)
+```{r}
+f = function(x){0.5*exp(-0.5*x)} # f(x)
+g1 = function(x){1/(2*pi)/(1+(x^2)/4)} # g1(x)
+g2 = function(x){1/sqrt(2*pi)*exp(-(x^2)/2)} # g2(x)
+```
+
+for g1(x):
+```{r}
+set.seed(1234)
+n=1000
+x=abs(rcauchy(n,0,2)) # x ~ cauchy(0,2), add absolute because h(x) include sqrt(x) which need >0, and cauchy distribution is symmetric with x = 0
+y = f(x)/g1(x)*h(x)
+mean(y); sd(y)
+```
+
+for g2(x):
+```{r}
+set.seed(1234)
+n=1000
+x=abs(rnorm(n,0,1)) # x ~ normal(0,1), add absolute because h(x) include sqrt(x) which need >0, and normal distribution is symmetric with x = 0
+y = f(x)/g2(x)*h(x)
+mean(y); sd(y)
+```
+
+for 4(b), I generate sample x1,...,xn(n = 1000) from a given distribution g1(x) or g2(x), then use the approximation mean(f(xi)/g(xi)*h(xi)) to estimate θ.
+f(x) and h(x) are same as part(a), g(x) is defined in the question.
+
+Estimation by using g2(x) has a lower mean, which is close to 0. Estimation by using g2(x) has a lower variance. So, g1(x) has a better mean and variance.
+
+
+
+

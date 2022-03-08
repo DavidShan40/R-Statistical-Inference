@@ -1,0 +1,592 @@
+---
+title: "Algorithm Report"
+output: html_notebook
+---
+
+1.a
+
+```{r}
+# distribution of density function
+pdf = function(x,a,b){
+  ((b^a) * exp(-b/x))/
+  (factorial(a-1)*(x^(a+1)))
+  }
+ddensity = function(x, a, b){
+  return(pdf(x,a,b))
+}
+```
+
+
+```{r}
+# True density function
+plot(seq(0,6,0.01),ddensity(seq(0,6,0.01),3,3), xlab = 'x')
+```
+
+
+
+# random walk: 
+# proposal function: Y - y(i-1) ~ norm(0,1)
+```{r}
+set.seed(1234)
+density = function (n, alpha, beta) 
+{
+    vec = vector("numeric", n)
+    vec[1] = beta/(alpha-1)   # Initial value.
+    for (i in 2:n) {
+        y = rnorm(1, 0, 1) # proposal distribution norm(0,1)
+        y = y + vec[i-1] # q(θ*/θ(t)), q is the proposal distribution
+        # distribution of the given density function, x must > 0. So for x<=0 density value is 0.
+        if (y <= 0){
+          aprob = 0
+        }
+        else{
+          aprob = min(1,ddensity(y,alpha,beta)/ddensity(vec[i-1],alpha,beta))}
+        u = runif(1)
+        if (u < aprob){ 
+            vec[i] = y}
+        else 
+            vec[i] = vec[i-1]
+    }
+    return(vec)
+}
+densityvec<-density(10000,3,3)
+par(mfrow=c(2,1))
+plot(ts(densityvec))
+hist(densityvec,xlim = c(0,6),breaks = 100)
+```
+# from the time line, the plot shows proposal function is too narrow. 
+# The histogram is similar as the density function.
+```{r}
+alpha = 3; beta = 3
+cat('true mean', beta/(alpha-1),'\n')
+cat('true variance', (beta^2)/((alpha-1)^2*(alpha-2)),'\n')
+cat('MH summary:\n')
+summary(densityvec)
+cat('MH variance',var(densityvec))
+```
+
+according to the trace plot, brun-in period should be 0-1999, keep 2000-10000
+
+```{r}
+acf(densityvec, lag.max = 10000)
+```
+
+# diagnose (output analysis, detect burn-in method by trace plot, autocorrelation)
+```{r}
+# acceptance rate
+accept = 0
+for (i in 2:length(densityvec)){
+  if (densityvec[i] != densityvec[i-1]){
+    accept = accept+1
+  }
+}
+acceptance_rate = accept/(length(densityvec)-1)
+acceptance_rate
+```
+
+# proposal function: Y - y(i-1) ~ unif(-1,1)
+```{r}
+set.seed(1234)
+density = function (n, alpha, beta) 
+{
+    vec = vector("numeric", n)
+    vec[1] = beta/(alpha-1)   # Initial value.
+    for (i in 2:n) {
+        y = runif(1,-1,1) # proposal distribution unif(-1,1)
+        y = y + vec[i-1] # q(θ*/θ(t)), q is the proposal distribution
+        if (y <= 0){
+          aprob = 0
+        }
+        else{
+          aprob = min(1,ddensity(y,alpha,beta)/ddensity(vec[i-1],alpha,beta))}
+        u = runif(1)
+        if (u < aprob){ 
+            vec[i] = y}
+        else 
+            vec[i] = vec[i-1]
+    }
+    return(vec)
+}
+densityvec<-density(10000,3,3)
+par(mfrow=c(2,1))
+plot(ts(densityvec))
+hist(densityvec,xlim = c(0,6),breaks = 60)
+```
+```{r}
+# acceptance rate
+accept = 0
+for (i in 2:length(densityvec)){
+  if (densityvec[i] != densityvec[i-1]){
+    accept = accept+1
+  }
+}
+acceptance_rate = accept/(length(densityvec)-1)
+acceptance_rate
+```
+
+```{r}
+alpha = 3; beta = 3
+cat('true mean', beta/(alpha-1),'\n')
+cat('true variance', (beta^2)/((alpha-1)^2*(alpha-2)),'\n')
+cat('MH summary:\n')
+summary(densityvec)
+cat('MH variance',var(densityvec))
+```
+```{r}
+acf(densityvec, lag.max = 10000)
+```
+# independence MH
+
+# check formula of mean
+```{r}
+# mean of density function
+mean_density = function(a, b){
+  # x*f(x)
+  mean_func = function(x){
+    x*
+  ((b^a) * exp(-b/x))/
+  (factorial(a-1)*(x^(a+1)))
+  }
+  integrate_result = integrate(mean_func,0,Inf)
+  return(as.numeric(as.character(integrate_result)[1])) # change format from integrate package to numeric
+}
+a = 3;b = 3
+mean_density(a,b)
+b/(a-1)
+```
+```{r}
+# acceptance rate
+accept = 0
+for (i in 2:length(densityvec)){
+  if (densityvec[i] != densityvec[i-1]){
+    accept = accept+1
+  }
+}
+acceptance_rate = accept/(length(densityvec)-1)
+acceptance_rate
+```
+# check formula of variance
+```{r}
+# variance of density function
+var_density = function(a, b){
+  # x^2*f(x)
+  var_func = function(x){
+    (x^2)*
+  ((b^a) * exp(-b/x))/
+  (factorial(a-1)*(x^(a+1)))
+  }
+  integrate_result = integrate(var_func,0,Inf)
+  return(as.numeric(as.character(integrate_result)[1])- mean_density(a,b)^2) # change format from integrate package to numeric
+}
+a = 3;b = 3
+var_density(a,b)
+(b^2)/((a-1)^2*(a-2))
+```
+
+# log normal distribution ~ logNormal(beta/(alpha-1), (beta^2)/((alpha-1)^2*(alpha-2)))
+
+```{r}
+set.seed(1234)
+density = function (n, alpha, beta) 
+{
+   mu = beta/(alpha-1)
+   sigma = sqrt((beta^2)/((alpha-1)^2*(alpha-2)))
+   vec = vector("numeric", n)
+   vec[1] = mu
+   for (i in 2:n) {
+      y <- rlnorm(1, mu, sigma)
+      aprob <- min(1, (ddensity(y, alpha, beta)/ddensity(vec[i-1], 
+        alpha, beta))/(dlnorm(y, mu, sigma)/dlnorm(vec[i-1], 
+          mu, sigma)))
+      u <- runif(1)
+      if (u < aprob) 
+          {vec[i] = y}
+      else 
+          vec[i] = vec[i-1]
+    }
+    return(vec)
+}
+densityvec<-density(10000,3,3)
+par(mfrow=c(2,1))
+plot(ts(densityvec))
+hist(densityvec,xlim = c(0,6),200)
+```
+```{r}
+alpha = 3; beta = 3
+cat('true mean', beta/(alpha-1),'\n')
+cat('true variance', (beta^2)/((alpha-1)^2*(alpha-2)),'\n')
+cat('MH summary:\n')
+summary(densityvec)
+cat('MH variance',var(densityvec))
+```
+```{r}
+acf(densityvec, lag.max = 100)
+```
+
+# 1b
+```{r}
+c.draw = function(c,p1,p2){
+  # exp(log e/p1 e) + exp(log e/p2 e)
+  rexp(1, log(exp(1),base = exp(1)/p1)) + rexp(1, log(exp(1),base = exp(1)/p2))
+}
+p1.draw = function(c,x1){
+  rbeta(1,x1+2+c,47-x1)
+}
+p2.draw = function(c,x2){
+  rbeta(1,x2+3+c,37-x2)
+}
+```
+
+```{r}
+x1 = 9; x2 = 8; c.start = 1
+
+gibbs = function(n.sims, c.start, x1, x2, burnin = 0, thin = 1) 
+{
+  c.draws = c(); p1.draws = c(); p2.draws = c()
+  c.cur = c.start
+
+  for (i in 1:n.sims) {
+
+  # draw p1
+  p1.cur = p1.draw(c = c.cur, x1 = x1)
+  
+  # draw p2
+  p2.cur = p2.draw(c = c.cur, x2 = x2)
+  
+  # draw c
+  c.cur = c.draw(c = c.cur, p1 = p1.cur, p2 = p2.cur)
+
+  # burn-in and thinning
+  if (i > burnin & (i - burnin)%%thin == 0) {
+     c.draws[(i - burnin)/thin] = c.cur
+     p1.draws[(i - burnin)/thin] = p1.cur
+     p2.draws[(i - burnin)/thin] = p2.cur
+   }
+  }
+
+  return(list(c.draws = c.draws, p1.draws = p1.draws, p2.draws = p2.draws))
+}
+```
+
+```{r}
+set.seed(1234)
+posterior = gibbs(n.sims = 10000, c.start = c.start, x1 = x1, x2 = x2, burnin = 0, thin = 1)
+round(mean(posterior$c.draws),3); round(mean(posterior$p1.draw),3); round(mean(posterior$p2.draw),3);
+round(sd(posterior$c.draws),3); round(sd(posterior$p1.draws),3); round(sd(posterior$p2.draws),3)
+```
+
+
+Question 2a
+
+# to draw a graph similar as powerpoint, first generate data points. Assume we have 3 classes as target, y1,y2 and y3.
+# for class 1, x1~norm(3,1), x2~norm(3,1)
+# for class 2, x1~norm(7,1), x2~norm(7,1)
+# for class 3, x1~norm(11,1), x2~norm(11,1)
+
+
+```{r}
+#xi_j: random number for xi class j
+set.seed(1244)
+n = 500
+x1_1 = rnorm(n,3,1); x1_2 = rnorm(n,7.5,1); x1_3 = rnorm(n,12,1)
+x2_1 = rnorm(n,3,1); x2_2 = rnorm(n,7.5,1); x2_3 = rnorm(n,12,1)
+data_1 = cbind(x1 = x1_1,x2 = x2_1,target = rep(1,n))
+data_2 = cbind(x1 = x1_2,x2 = x2_2,target = rep(2,n))
+data_3 = cbind(x1 = x1_3,x2 = x2_3,target = rep(3,n))
+data = data.frame(rbind(data_1,data_2,data_3))
+data$target=as.character(data$target)
+library(ggplot2)
+ggplot(data,aes(x1,x2,color = target)) + geom_point()
+```
+
+```{r}
+library(dplyr)
+discriminant_func = function(data, var_name){
+  x = data[,1:2]
+  xk = filter(data,target==var_name)[,1:2]
+  uk = apply(xk,2,mean)# mean of xk
+  cov_matrix = cov(data[,1:2]) # common covariance matrix
+  pi_k = nrow(xk)/nrow(x) # the prior probability of class k
+  a = solve(cov_matrix) %*% uk
+  b = -1/2 * t(uk) %*% solve(cov_matrix) %*% uk + log(pi_k)
+  return(list(a,b))# return t(x)*a + b
+}
+discriminant_func(data, '1')
+discriminant_func(data, '2')
+discriminant_func(data, '3')
+```
+
+discriment function of class 1: δ1(x) = 0.14706229 * x1 + 0.06090421 * x2 - 1.407257
+discriment function of class 2: δ2(x) = 0.3057810 * x1 + 0.2198876 * x2 - 3.065252
+discriment function of class 3: δ3(x) = 0.4643660 * x1 + 0.3816839 * x2 - 6.192982
+
+when δ1(x) = δ2(x) > δ3(x):
+First look at δ1(x) = δ2(x)
+0.14706229 * x1 + 0.06090421 * x2 - 1.407257 = 0.3057810 * x1 + 0.2198876 * x2 - 3.065252
+```{r}
+0.3057810 - 0.14706229; 0.2198876 - 0.06090421; 3.065252 - 1.407257
+```
+0.1587187 x1 + 0.1589834 x2 = 1.657995
+```{r}
+0.1587187/0.1589834; 1.657995/0.1589834
+```
+
+x2 = -0.998335 x1 + 10.42873
+base on this condition, δ2(x) > δ3(x)
+0.3057810 * x1 + 0.2198876 * x2 - 3.065252 > 0.4643660 * x1 + 0.3816839 * x2 - 6.192982
+```{r}
+0.4643660 - 0.3057810; 0.3816839 - 0.2198876; 6.192982 - 3.065252
+```
+
+0.158585 x1 + 0.1617963 x2 < 3.12773, when apply x2 = -0.998335 x1 + 10.42873:
+```{r}
+0.1617963 * -0.998335 + 0.158585; 3.12773 - 0.1617963 * 10.42873
+```
+-0.002941909 x1 < 1.4404
+```{r}
+1.4404 / -0.002941909
+```
+x1 > -489.6141
+
+so, when x1 > -489.6141, the line segment between class 1 and class 2 is x2 = -0.998335 x1 + 10.42873.
+
+Repeat the step above for class 2 and class 3:
+when δ2(x) = δ3(x) > δ1(x):
+First look at δ1(x) = δ2(x)
+0.3057810 * x1 + 0.2198876 * x2 - 3.065252 = 0.4643660 * x1 + 0.3816839 * x2 - 6.192982,
+0.158585 x1 + 0.1617963 x2 = 3.12773,
+```{r}
+0.158585/0.1617963; 3.12773/0.1617963
+```
+line segment: x2 = -0.9801522 x1 + 19.33128
+base on this condition, δ3(x) > δ1(x),
+0.4643660 * x1 + 0.3816839 * x2 - 6.192982 > 0.14706229 * x1 + 0.06090421 * x2 - 1.407257
+```{r}
+0.4643660 - 0.14706229; 0.3816839 - 0.06090421; 6.192982-1.407257
+```
+0.3173037x1 + 0.3207797x2 > 4.785725
+apply x2 = -0.9801522 x1 + 19.33128:
+0.3173037x1 + 0.3207797(-0.9801522 x1 + 19.33128) > 4.785725
+
+```{r}
+0.3173037 - 0.9801522 * 0.3207797; 4.785725 - 19.33128 * 0.3207797
+```
+0.002890771 x1 > -1.415357;
+```{r}
+-1.415357 / 0.002890771
+```
+x1 > -489.6123
+
+so, when x1 > -489.6123, the line segment between class 2 and class 3 is x2 = -0.9801522 x1 + 19.33128
+
+```{r}
+ggplot(data,aes(x1,x2,color = target)) + 
+  geom_point() + 
+  geom_abline(slope=-0.998335, intercept=10.42873) +
+  geom_abline(slope=-0.9801522, intercept=19.33128)
+```
+
+# 2(b)
+# I'm using Linear Regression using an Indicator Matrix that discribed in 4.2
+
+```{r}
+g = data$target
+Y = data.frame(y1 = rep(0,length(g)))
+Y$y1 = ifelse(g == "1",1,0)
+Y$y2 = ifelse(g == "2",1,0)
+Y$y3 = ifelse(g == "3",1,0)
+Y = as.matrix(Y); x = as.matrix(cbind(one_column=rep(1,nrow(data)),data[,1:2]))
+LSE = solve(t(x) %*% x) %*% t(x) %*% Y # least square estimate
+LSE
+```
+
+```{r}
+t(LSE)
+```
+
+For a new observation with the input X* = c(x1*, x2*):
+f^(X) =  t(B^) %*% X* = c(f1^(x), f2^(x),f3^(x)),
+f1^(x) = 1.1296913 - 5.292666e-02 * x1 - 0.0533425704 * x2,
+f2^(x) = 0.3355631 + 1.486285e-05 * x1 - 0.0003127571 * x2,
+f3^(x) = -0.4652543 + 5.291180e-02* x1 + 0.0536553276 * x2,
+
+classify to class k when fk^(x) is the maximum value.
+compare with f1^(x) and f2^(x),
+
+when we classify x as class 1 rather than class2 and class 3, 
+f1^(x) > f2^(x) and f1^(x) > f3^(x)
+
+1.1296913 - 5.292666e-02 * x1 - 0.0533425704 * x2 > 0.3355631 + 1.486285e-05 * x1 - 0.0003127571 * x2 and
+1.1296913 - 5.292666e-02 * x1 - 0.0533425704 * x2 > -0.4652543 + 5.291180e-02* x1 + 0.0536553276 * x2
+
+```{r}
+1.1296913 - 0.3355631; 5.292666e-02 + 1.486285e-05; 0.0533425704 - 0.0003127571
+1.1296913 + 0.4652543; 5.292666e-02 + 5.291180e-02; 0.0533425704 + 0.0536553276
+```
+0.7941282 > 0.05294152 x1 + 0.05302981 x2,
+1.594946 > 0.1058385 x1 + 0.1069979 x2;
+```{r}
+0.7941282/0.05302981; 0.05294152/0.05302981
+1.594946/0.1069979; 0.1058385/0.1069979
+```
+
+x2 < 14.97513 - 0.9983351 x1 when f1^(x) > f2^(x) and 
+x2 < 14.90633 - 0.9891643 x1 when f1^(x) > f3^(x)
+
+```{r}
+(14.97513-14.90633)/(0.9983351-0.9891643)
+```
+for x1 > 7.502072, x2 < 14.97513 - 0.9983351 x1 since it satisfy both condition
+else x2 < 14.90633 - 0.9891643 x1, f1^(x) is the maximum, then we classify to class 1.
+
+
+when we classify x as class 2 rather than class1 and class 3, 
+f2^(x) > f1^(x) and f2^(x) > f3^(x)
+from above, x2 < 14.97513 - 0.9983351 x1 when f1^(x) > f2^(x). So when x2 > 14.97513 - 0.9983351 x1 when f2^(x) > f1^(x)
+
+for f2^(x) > f3^(x), 0.3355631 + 1.486285e-05 * x1 - 0.0003127571 * x2 > -0.4652543 + 5.291180e-02* x1 + 0.0536553276 * x2,
+```{r}
+0.3355631 + 0.4652543; 5.291180e-02 - 1.486285e-05; 0.0536553276 + 0.0003127571
+```
+
+0.8008174 > 0.05289694 x1 + 0.05396808 x2,
+```{r}
+0.8008174/0.05396808; 0.05289694 / 0.05396808
+```
+x2 < 14.83872 - 0.9801523 x1 when f2^(x) > f3^(x)
+also x2 > 14.97513 - 0.9983351 x1 when f2^(x) > f1^(x)
+
+
+so, when 14.97513 - 0.9983351 x1 < x2 < 14.83872 - 0.9801523 x1, f2^(x) is the maximum, then we classify to class 2.
+
+There is a masking problem when classify class 2, since two boundaries is too close to each other.
+
+when we classify x as class 3 rather than class1 and class 2, 
+f3^(x) > f1^(x) and f3^(x) > f2^(x)
+
+from above, x2 < 14.90633 - 0.9891643 x1 when f1^(x) > f3^(x),
+x2 < 14.83872 - 0.9801523 x1 when f2^(x) > f3^(x)
+
+so, x2 > 14.90633 - 0.9891643 x1 when f3^(x) > f1^(x),
+x2 > 14.83872 - 0.9801523 x1 when f3^(x) > f2^(x)
+```{r}
+(14.90633 - 14.83872)/(0.9891643 - 0.9801523)
+```
+
+when x1 < 7.502219, x2 > 14.83872 - 0.9801523 x1 since it satisfy both condition.
+else x2 > 14.90633 - 0.9891643 x1
+
+Draw the graph by above boundaries:
+```{r}
+ggplot(data,aes(x1,x2,color = target)) + 
+  geom_point() + 
+  geom_abline(slope=-0.9983351, intercept=14.97513) + # when f1^(x) = f2^(x) 
+  geom_abline(slope=-0.9891643, intercept=14.90633) + # when f1^(x) = f3^(x) 
+  geom_abline(slope=-0.9801523, intercept=14.83872)   # when f2^(x) = f3^(x) 
+```
+
+Obviously there is a masking problem for class 2. (reasons are on the report)
+
+Question 3
+
+n1 = 300, n2 = 500, n3 = 700 (total 1500) (for training)
+n1 = 60, n2 = 100, n3 = 140 (total 300) (for testing)
+
+choose p = 3, q = 3
+p of them are truly different among the 3 classes (significant predictors):
+# for class 1, x1~norm(3,1), x2~uniform(-1,1), x3 ~ gamma(1,1)
+# for class 2, x1~norm(7,1), x2~uniform(1,3), x3 ~ gamma(3,3)
+# for class 3, x1~norm(11,1), x2~uniform(3,5), x3 ~ gamma(5,5)
+
+q of them are in fact the same for all three classes (insignificant predictors, or noises)
+
+# x4 ~ norm(3,3), x5 ~ beta(4,4), x6 = x4 * x5
+
+number of simulation: S = 500
+
+function for linear regression:
+```{r}
+lm_func = function(X,y,test_X, seed = 1244){
+  # input: train value of X and y, test value of X
+  # output: predicted test value of y
+
+  set.seed(1244)
+  y_temp = y
+  y = data.frame(y1 = rep(0,length(y)))
+  y$y1 = ifelse(y_temp == "1",1,0)
+  y$y2 = ifelse(y_temp == "2",1,0)
+  y$y3 = ifelse(y_temp == "3",1,0)
+  X = as.matrix(cbind(one_column=rep(1,nrow(data)),X)); y = as.matrix(y); test_X = as.matrix(test_X)
+  LSE = solve(t(X) %*% X) %*% t(X) %*% y # least square estimate
+  
+  k = LSE[1,]
+  for (i in 1:(nrow(test_X)-1)){
+    k = rbind(k,LSE[1,])
+  }
+  result_value = test_X %*% LSE[2:nrow(LSE),] + k
+  result = as.matrix(rep(0,nrow(test_X)))
+  indicator_1 = (result_value[,1] >= result_value[,2]) & (result_value[,1] >= result_value[,3])
+  result[indicator_1] = '1'
+  indicator_2 = (result_value[,2] > result_value[,1]) & (result_value[,2] >= result_value[,3])
+  result[indicator_2] = '2'
+  indicator_3 = (result_value[,3] > result_value[,1]) & (result_value[,3] > result_value[,2])
+  result[indicator_3] = '3'
+  return(result)
+}
+
+```
+
+
+```{r}
+library(MASS)
+require(nnet)
+require(caret)
+
+set.seed(1244)
+n1 = 300; n2 = 500; n3 = 700; n = 1500 # n for training
+n1_ = 60; n2_ = 100; n3_ = 140; n_ = 300 # n for testing
+S = 500
+test_error_lr = c(); test_error_lda = c(); test_error_logit = c()
+for (i in 1:S){
+  x1 = c(rnorm(n1,3,1),rnorm(n2,7,1),rnorm(n3,11,1))
+  x2 = c(runif(n1,-1,1),runif(n2,1,3),runif(n3,3,5))
+  x3 = c(rgamma(n1,1,1),rgamma(n2,3,3),rgamma(n3,5,5))
+  x4 = rnorm(n,3,3); x5 = rbeta(n,4,4); x6 = x4 * x5
+  X = cbind(x1,x2,x3,x4,x5,x6)
+  y = c(rep('1',n1),rep('2',n2),rep('3',n3))
+  
+  
+  x1_ = c(rnorm(n1_,3,1),rnorm(n2_,7,1),rnorm(n3_,11,1))
+  x2_ = c(runif(n1_,-1,1),runif(n2_,1,3),runif(n3_,3,5))
+  x3_ = c(rgamma(n1_,1,1),rgamma(n2_,3,3),rgamma(n3_,5,5))
+  x4_ = rnorm(n_,3,3); x5_ = rbeta(n_,4,4); x6_ = x4_ * x5_
+  X_test = cbind(x1 = x1_,x2 = x2_,x3 = x3_,x4 = x4_,x5 = x5_,x6 = x6_)
+  y_test_true = c(rep('1',n1_),rep('2',n2_),rep('3',n3_))
+  
+  # linear regression
+  y_test = lm_func(X,y,X_test)
+  test_error_lr = cbind(test_error_lr, sum(y_test != y_test_true)/ nrow(X_test))
+  #print(confusionMatrix(as.factor(y_test), as.factor(y_test_true)))# confusion matrix
+  
+  # LDA
+  data=data.frame(X)
+  data$y = y
+  model_lda = lda(y~.,data = data)
+  y_test_lda = predict(model_lda, data.frame(X_test))
+  y_test_lda = as.character(y_test_lda$class)
+  test_error_lda = cbind(test_error_lda, sum(y_test_lda != y_test_true)/ nrow(X_test))
+  
+  # Logistic Regression
+  model_logit <- multinom(y~.,data=data,trace = FALSE) # trace = FALSE close the extra messages
+  y_test_logit= as.character(predict(model_logit,data.frame(X_test)))
+  test_error_logit = cbind(test_error_logit, sum(y_test_logit != y_test_true)/ nrow(X_test))
+}
+mean(test_error_lr);mean(test_error_lda); mean(test_error_logit)
+```
+
+
+
+
+
+
+
